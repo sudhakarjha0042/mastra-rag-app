@@ -77,28 +77,84 @@ export function chunkText(text: string, fileName: string, chunkSize: number = 10
   return chunks;
 }
 
-export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ embedding: number[], metadata: any, content: string }[]> {
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+      await sleep(delay);
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+export async function generateEmbeddings(
+  chunks: DocumentChunk[], 
+  batchSize: number = 25,
+  onProgress?: (current: number, total: number) => void
+): Promise<{ embedding: number[], metadata: any, content: string }[]> {
     console.log('generating embeddings chunks using mastra');
     
-    const chunkTexts = chunks.map(chunk => chunk.content);
+    const allEmbeddings: { embedding: number[], metadata: any, content: string }[] = [];
+    const totalBatches = Math.ceil(chunks.length / batchSize);
     
-    const { embeddings } = await embedMany({
-      model: aiOpenAI.embedding("text-embedding-3-small"),
-      values: chunkTexts,
-    });
+    // Process chunks in batches to avoid token limits
+    for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        const chunkTexts = batch.map(chunk => chunk.content);
+        const currentBatch = Math.floor(i / batchSize) + 1;
+        
+        console.log(`Processing batch ${currentBatch}/${totalBatches} (${chunkTexts.length} chunks)`);
+        
+        if (onProgress) {
+          onProgress(currentBatch, totalBatches);
+        }
+        
+        try {
+            const batchEmbeddings = await retryWithBackoff(async () => {
+              const { embeddings } = await embedMany({
+                  model: aiOpenAI.embedding("text-embedding-3-small"),
+                  values: chunkTexts,
+              });
+              
+              return batch.map((chunk, index) => {
+                  const embedding = embeddings[index];
+                  
+                  return {
+                      embedding: embedding as number[],
+                      metadata: chunk.metadata,
+                      content: chunk.content,
+                  };
+              });
+            }, 3, 2000);
+            
+            allEmbeddings.push(...batchEmbeddings);
+            
+            // Add longer delay between batches to prevent connection issues
+            if (i + batchSize < chunks.length) {
+                await sleep(500);
+            }
+        } catch (error) {
+            console.error(`Error processing batch ${currentBatch}:`, error);
+            throw new Error(`Failed to process batch ${currentBatch}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
     
-    console.log('embedding successfull');
-    
-    const validatedEmbeddings = chunks.map((chunk, index) => {
-      const embedding = embeddings[index];
-
-      return {
-        embedding: embedding as number[],
-        metadata: chunk.metadata,
-        content: chunk.content,
-      };
-    });
-    
+    console.log('embedding successful');
     console.log('embeddings validated');
-    return validatedEmbeddings;
+    return allEmbeddings;
 }

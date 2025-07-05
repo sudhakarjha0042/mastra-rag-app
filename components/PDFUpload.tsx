@@ -10,6 +10,7 @@ export default function PDFUpload({ onUploadSuccess }: PDFUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -29,6 +30,7 @@ export default function PDFUpload({ onUploadSuccess }: PDFUploadProps) {
 
     setUploading(true);
     setError(null);
+    setProgress({ current: 0, total: 0 });
 
     try {
       const formData = new FormData();
@@ -43,6 +45,7 @@ export default function PDFUpload({ onUploadSuccess }: PDFUploadProps) {
 
       if (response.ok) {
         onUploadSuccess();
+        setProgress({ current: 0, total: 0 });
       } else {
         setError(result.error || 'Failed to upload PDF');
       }
@@ -144,9 +147,16 @@ export default function PDFUpload({ onUploadSuccess }: PDFUploadProps) {
             className="upload-btn"
           >
             {uploading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="loading-spinner"></span>
-                Processing PDF...
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className="loading-spinner"></span>
+                  Processing PDF...
+                </div>
+                {progress.total > 0 && (
+                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                    Processing embeddings: {progress.current}/{progress.total} batches
+                  </div>
+                )}
               </div>
             ) : (
               'Upload and Process PDF'

@@ -3,7 +3,10 @@ import { embedMany } from "ai";
 import OpenAI from 'openai';
 import { MDocument } from "@mastra/rag";
 
-let openai: OpenAI;
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const store = new PineconeVector({
   apiKey: process.env.PINECONE_API_KEY,
