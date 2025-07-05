@@ -2,67 +2,21 @@ import { PineconeVector } from '@mastra/pinecone'
 import { embedMany } from "ai";
 import OpenAI from 'openai';
 import { MDocument } from "@mastra/rag";
-import { z } from "zod";
 
-// Initialize the OpenAI client first before using it
 let openai: OpenAI;
 
-try {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.error('Warning: OPENAI_API_KEY environment variable is not set');
-  } else {
-    openai = new OpenAI({ apiKey });
-    console.log('OpenAI client initialized successfully');
-  }
-} catch (error) {
-  console.error('Error initializing OpenAI client:', error);
-}
-
-// Initialize Pinecone vector store
 const store = new PineconeVector({
   apiKey: process.env.PINECONE_API_KEY,
 });
 
-// Convert the top-level code to an example function
-export async function exampleDocumentProcessing() {
-  const doc = MDocument.fromText(`Your document text here...`);
 
-  const chunks = await doc.chunk({
-    strategy: "recursive",
-    size: 512,
-    overlap: 50,
-  });
-  
-  if (!openai) {
-    throw new Error('OpenAI client not initialized');
-  }
-  
-  const { embeddings } = await embedMany({
-    values: chunks.map((chunk) => chunk.text),
-    model: openai.embedding("text-embedding-3-small"),
-  });
-
-  await store.createIndex({
-    indexName: "mycollection",
-    dimension: 1536,
-  });
-  
-  await store.upsert({
-    indexName: "mycollection",
-    vectors: embeddings,
-    metadata: chunks.map(chunk => ({ text: chunk.text })),
-  });
-}
-
-// Optional: Initialize Pinecone indexes if needed
 export async function initializePineconeIndexes() {
   try {
     await store.createIndex({
-      indexName: "pazagopinecone",
+      indexName: "mastra-rag-documents-1536",
       dimension: 1536,
     });
-    console.log("Pinecone index 'pazagopinecone' created or already exists");
+    console.log("Pinecone index 'mastra-rag-documents-1536' created or already exists");
   } catch (error) {
     console.error("Error creating Pinecone index:", error);
   }
@@ -128,36 +82,33 @@ export async function queryDocuments(queryText: string, topK: number = 3) {
 
 export const index = {
   query: async (params: any) => {
-    const indexName = 'mastra-rag-documents-1536'; // Use specific name for 1536-dim vectors
+    const indexName = 'mastra-rag-documents-1536';
     return await store.query({
       indexName,
       ...params,
     });
   },
   upsert: async (vectors: any[]) => {
-    const indexName = 'mastra-rag-documents-1536'; // Use specific name for 1536-dim vectors
+    const indexName = 'mastra-rag-documents-1536'; 
     
-    // Ensure the index exists with correct dimension
     try {
       await store.createIndex({
         indexName,
-        dimension: 1536, // Match text-embedding-ada-002 dimension
+        dimension: 1536, 
       });
       console.log(`Index ${indexName} created or verified with 1536 dimensions`);
     } catch (error) {
       console.log('Index creation result:', error);
-      // Continue if index already exists with correct dimensions
     }
     
-    // Validate vectors and extract the required data
     const vectorData = vectors.map((v, index) => {
       if (!v.id || !v.values || !Array.isArray(v.values)) {
         console.error('Invalid vector format at index:', index, v);
         throw new Error(`Invalid vector format at index ${index}`);
       }
       
-      console.log(`Vector ${index} dimension:`, v.values.length); // Log dimension for debugging
-      return v.values; // Extract just the embedding values
+      console.log(`Vector ${index} dimension:`, v.values.length); 
+      return v.values; 
     });
     
     const metadata = vectors.map(v => v.metadata || {});

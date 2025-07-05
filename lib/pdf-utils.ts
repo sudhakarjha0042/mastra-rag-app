@@ -14,7 +14,6 @@ export interface DocumentChunk {
 
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    // Dynamic import to avoid module loading issues
     const pdfParse = await import('pdf-parse/lib/pdf-parse');
     const pdf = pdfParse.default || pdfParse;
     
@@ -24,7 +23,6 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   } catch (error) {
     console.error('Error extracting text from PDF:', error);
     
-    // Fallback: try alternative approach
     try {
       const pdfParse = require('pdf-parse');
       const data = await pdfParse(buffer);
@@ -80,8 +78,7 @@ export function chunkText(text: string, fileName: string, chunkSize: number = 10
 }
 
 export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ embedding: number[], metadata: any, content: string }[]> {
-  try {
-    console.log('Generating embeddings for chunks using Mastra AI');
+    console.log('generating embeddings chunks using mastra');
     
     const chunkTexts = chunks.map(chunk => chunk.content);
     
@@ -90,16 +87,11 @@ export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ emb
       values: chunkTexts,
     });
     
-    console.log('Embeddings generated successfully, validating format...');
+    console.log('embedding successfull');
     
     const validatedEmbeddings = chunks.map((chunk, index) => {
       const embedding = embeddings[index];
-      
-      if (!Array.isArray(embedding) || !embedding.every(val => typeof val === 'number')) {
-        console.error('Invalid embedding format at index:', index, typeof embedding);
-        throw new Error(`Invalid embedding format at index ${index}: expected number array`);
-      }
-      
+
       return {
         embedding: embedding as number[],
         metadata: chunk.metadata,
@@ -107,49 +99,6 @@ export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ emb
       };
     });
     
-    console.log('All embeddings validated successfully');
+    console.log('embeddings validated');
     return validatedEmbeddings;
-  } catch (error) {
-    console.error('Error generating embeddings with Mastra AI:', error);
-    
-    if (!openai) {
-      console.error('OpenAI client not initialized');
-      throw new Error('Failed to generate embeddings: OpenAI client not available');
-    }
-    
-    console.log('Falling back to direct OpenAI embedding generation...');
-    const embeddings = [];
-    
-    for (const chunk of chunks) {
-      try {
-        console.log('Fallback: Generating embedding for chunk:', chunk.metadata.chunkIndex);
-        
-        const response = await openai.embeddings.create({
-          model: 'text-embedding-ada-002',
-          input: chunk.content,
-        });
-        
-        if (!response.data[0].embedding) {
-          throw new Error('Invalid embedding response from OpenAI');
-        }
-        
-        // Validate embedding format
-        const embedding = response.data[0].embedding;
-        if (!Array.isArray(embedding) || !embedding.every(val => typeof val === 'number')) {
-          throw new Error('Invalid embedding format from OpenAI API');
-        }
-        
-        embeddings.push({
-          embedding: embedding,
-          metadata: chunk.metadata,
-          content: chunk.content,
-        });
-      } catch (chunkError) {
-        console.error('Error generating embedding for chunk:', chunk.metadata.chunkIndex, chunkError);
-        throw new Error(`Failed to generate embeddings: ${chunkError instanceof Error ? chunkError.message : 'Unknown error'}`);
-      }
-    }
-    
-    return embeddings;
-  }
 }

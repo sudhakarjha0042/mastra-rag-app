@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-// import { openai, queryDocuments } from '@/lib/mastra';
-
 import { openai } from "@ai-sdk/openai";
-import { embed } from "ai";
+import { embed, generateText } from "ai";
 import { Pinecone } from '@pinecone-database/pinecone';
 
 export async function POST(request: NextRequest) {
@@ -16,13 +14,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert query to embedding
     const { embedding } = await embed({
       value: message,
       model: openai.embedding("text-embedding-3-small"),
     });
     
-    // Query vector store
     const pinecone = new Pinecone({
       apiKey: process.env.PINECONE_API_KEY!,
     });
@@ -34,13 +30,14 @@ export async function POST(request: NextRequest) {
       includeMetadata: true,
     });
 
-    console.log('Search results:', results);
+    // console.log('Search results:', results);
+    console.log('First match metadata:', results.matches?.[0]?.metadata);
 
     const searchResults = results.matches || [];
 
     const context = searchResults
-      .filter(match => match.score && match.score > 0.4)
-      .map(match => match.metadata?.text)
+      .filter(match => match.score && match.score > 0.2)
+      .map(match => match.metadata?.content)
       .filter(Boolean)
       .join('\n\n');
 
@@ -50,9 +47,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const { text } = await generateText({
+      model: openai("gpt-4"),
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that answers questions based on the provided context. Only use information from the context to answer questions. If the context doesn't contain relevant information, say so."
+        },
+        {
+          role: "user",
+          content: `Context: ${context}\n\nQuestion: ${message}`
+        }
+      ],
+    });
+
     return NextResponse.json({
+      response: text,
       context,
-      sources: searchResults.length,
+      sources: searchResults.filter(match => match.score && match.score > 0.2).length,
     });
 
   } catch (error) {
@@ -64,4 +76,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
-  
+
