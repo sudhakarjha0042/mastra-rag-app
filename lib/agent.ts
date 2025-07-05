@@ -1,5 +1,21 @@
 import { Agent, Mastra } from '@mastra/core';
 import { openai } from "@ai-sdk/openai";
+import { createVectorQueryTool } from "@mastra/rag";
+
+export const queryVectorTool = createVectorQueryTool({
+  id: "query-vector",
+  vectorStoreName: "pg",
+  indexName: "mastra-rag-documents-1536",
+  model: openai.embedding("text-embedding-3-small"),
+  enableFilter: true,
+  reranker: {
+    model: openai("gpt-4o"),
+    options: {
+      topK: 5,
+    },
+  },
+});
+
 
 // Initialize Mastra
 const mastra = new Mastra({
@@ -30,12 +46,17 @@ Response Format:
 
 Remember: Your authority comes from the shareholder letters. Stay grounded in this source material and be transparent about the scope and limitations of your knowledge.`,
       model: openai("gpt-4o"),
+      tools: {
+        queryVectorTool,
+      }
     }),
   },
 });
 
 // Berkshire Hathaway Financial Analyst Agent
 export const financialAnalystAgent = mastra.getAgent('financialAnalyst');
+
+
 
 // Memory store for conversation context
 interface ConversationMemory {
