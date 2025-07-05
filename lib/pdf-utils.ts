@@ -58,7 +58,7 @@ export function chunkText(text: string, fileName: string, chunkSize: number = 10
       });
       
       const words = currentChunk.split(' ');
-      const overlapWords = words.slice(-Math.floor(overlap / 10)); // Approximate overlap
+      const overlapWords = words.slice(-Math.floor(overlap / 10));
       currentChunk = overlapWords.join(' ') + ' ' + trimmedSentence;
     } else {
       currentChunk += (currentChunk ? ' ' : '') + trimmedSentence;
@@ -83,10 +83,8 @@ export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ emb
   try {
     console.log('Generating embeddings for chunks using Mastra AI');
     
-    // Extract all chunk contents
     const chunkTexts = chunks.map(chunk => chunk.content);
     
-    // Generate embeddings for all chunks at once using Mastra AI
     const { embeddings } = await embedMany({
       model: aiOpenAI.embedding("text-embedding-ada-002"),
       values: chunkTexts,
@@ -94,11 +92,9 @@ export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ emb
     
     console.log('Embeddings generated successfully, validating format...');
     
-    // Map the embeddings to the expected return format with validation
     const validatedEmbeddings = chunks.map((chunk, index) => {
       const embedding = embeddings[index];
       
-      // Validate that embedding is an array of numbers
       if (!Array.isArray(embedding) || !embedding.every(val => typeof val === 'number')) {
         console.error('Invalid embedding format at index:', index, typeof embedding);
         throw new Error(`Invalid embedding format at index ${index}: expected number array`);
@@ -116,7 +112,6 @@ export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ emb
   } catch (error) {
     console.error('Error generating embeddings with Mastra AI:', error);
     
-    // Fallback to the original OpenAI embedding method if needed
     if (!openai) {
       console.error('OpenAI client not initialized');
       throw new Error('Failed to generate embeddings: OpenAI client not available');

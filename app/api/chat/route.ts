@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { openai, queryDocuments } from '@/lib/mastra';
+// import { openai, queryDocuments } from '@/lib/mastra';
+
+import { openai } from "@ai-sdk/openai";
+import { embed } from "ai";
+import { Pinecone } from '@pinecone-database/pinecone';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,13 +16,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use the queryDocuments function from mastra
-    const searchResults = await queryDocuments(message, 5);
+    // Convert query to embedding
+    const { embedding } = await embed({
+      value: message,
+      model: openai.embedding("text-embedding-3-small"),
+    });
+    
+    // Query vector store
+    const pinecone = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY!,
+    });
+    
+    const index = pinecone.index("mastra-rag-documents-1536");
+    const results = await index.query({
+      vector: embedding,
+      topK: 10,
+      includeMetadata: true,
+    });
 
-    // Extract relevant context from search results
+    console.log('Search results:', results);
+
+    const searchResults = results.matches || [];
+
     const context = searchResults
-      .filter(match => match.score && match.score > 0.7)
-      .map(match => match.text)
+      .filter(match => match.score && match.score > 0.4)
+      .map(match => match.metadata?.text)
       .filter(Boolean)
       .join('\n\n');
 
@@ -28,32 +50,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate response using OpenAI with context
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a helpful assistant that answers questions based on the provided context from PDF documents. 
-                   Use only the information from the context to answer questions. 
-                   If the context doesn't contain enough information to answer the question, say so clearly.
-                   
-                   Context:
-                   ${context}`
-        },
-        {
-          role: 'user',
-          content: message
-        }
-      ],
-      max_tokens: 500,
-      temperature: 0.3,
-    });
-
-    const response = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-
     return NextResponse.json({
-      response,
+      context,
       sources: searchResults.length,
     });
 
@@ -65,13 +63,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-    });
 
-  } catch (error) {
-    console.error('Error in chat:', error);
-    return NextResponse.json(
-      { error: 'Failed to process chat message' },
-      { status: 500 }
-    );
-  }
-}
+  
