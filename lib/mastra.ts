@@ -128,34 +128,46 @@ export async function queryDocuments(queryText: string, topK: number = 3) {
 
 export const index = {
   query: async (params: any) => {
-    const indexName = process.env.PINECONE_INDEX_NAME?.toLowerCase() || 'rag-documents';
+    const indexName = 'mastra-rag-documents-1536'; // Use specific name for 1536-dim vectors
     return await store.query({
       indexName,
       ...params,
     });
   },
   upsert: async (vectors: any[]) => {
-    const indexName = process.env.PINECONE_INDEX_NAME?.toLowerCase() || 'rag-documents';
+    const indexName = 'mastra-rag-documents-1536'; // Use specific name for 1536-dim vectors
     
-    // Validate and format vectors properly
-    const formattedVectors = vectors.map((v, index) => {
-      if (!v.id || !v.embedding || !Array.isArray(v.embedding)) {
+    // Ensure the index exists with correct dimension
+    try {
+      await store.createIndex({
+        indexName,
+        dimension: 1536, // Match text-embedding-ada-002 dimension
+      });
+      console.log(`Index ${indexName} created or verified with 1536 dimensions`);
+    } catch (error) {
+      console.log('Index creation result:', error);
+      // Continue if index already exists with correct dimensions
+    }
+    
+    // Validate vectors and extract the required data
+    const vectorData = vectors.map((v, index) => {
+      if (!v.id || !v.values || !Array.isArray(v.values)) {
         console.error('Invalid vector format at index:', index, v);
         throw new Error(`Invalid vector format at index ${index}`);
       }
       
-      return {
-        id: v.id,
-        values: v.embedding, // Ensure this is the number array
-        metadata: v.metadata || {}
-      };
+      console.log(`Vector ${index} dimension:`, v.values.length); // Log dimension for debugging
+      return v.values; // Extract just the embedding values
     });
     
-    console.log('Upserting vectors to Pinecone:', formattedVectors.length);
+    const metadata = vectors.map(v => v.metadata || {});
+    
+    console.log('Upserting vectors to Pinecone:', vectors.length);
     
     return await store.upsert({
       indexName,
-      vectors: formattedVectors
+      vectors: vectorData,
+      metadata: metadata
     });
   },
 };
