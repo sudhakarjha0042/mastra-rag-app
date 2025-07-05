@@ -83,7 +83,7 @@ export async function generateEmbeddings(chunks: DocumentChunk[]): Promise<{ emb
     const chunkTexts = chunks.map(chunk => chunk.content);
     
     const { embeddings } = await embedMany({
-      model: aiOpenAI.embedding("text-embedding-ada-002"),
+      model: aiOpenAI.embedding("text-embedding-3-small"),
       values: chunkTexts,
     });
     
